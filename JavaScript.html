@@ -5,62 +5,50 @@
 
 // ── App State ────────────────────────────────────────────
 var state = {
-  members:       [],
-  chores:        [],
-  points:        {},
-  selectedMember: null,
-  selectedColor: '#bae0ff',
-  editingChore:  null,
-  activeModal:   null
+  members:          [],
+  chores:           [],
+  points:           {},
+  rewards:          [],
+  redemptions:      [],
+  selectedMember:   null,
+  selectedColor:    '#e8660d',
+  editSelectedColor:'#e8660d',
+  editingChore:     null,
+  editingMember:    null,
+  activeModal:      null
 };
 
 var COLORS = [
-  '#bae0ff','#69b1ff','#fffbe6','#fff566',
-  '#ffccc7','#ff4d4f','#d9f7be','#52c41a',
-  '#ffd591','#adc6ff'
+  '#e8660d','#d35400','#f0a500','#d4ac0d',
+  '#8b1a1a','#c0392b','#784212','#935116',
+  '#7e5109','#a04000'
 ];
-
-var EMOJIS_CHORES = ['🧹','🧺','🍽️','🌿','🛒','📚','🐶','🏡','💧','🪣','✨','🧽','🛏️','🚿','🪴'];
 
 // ── Init ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
-  buildSparkles();
-  buildColorPicker();
+  buildColorPicker('colorPicker', 'selectedColor');
   bindNav();
-  bindAdminButtons();
+  bindButtons();
   bindModal();
   bindFilters();
+  bindChoreTypeToggle();
   loadAll();
 });
 
-// ── Sparkles ──────────────────────────────────────────────
-function buildSparkles() {
-  var bg = document.getElementById('sparklesBg');
-  var icons = ['🌿','🍃','🌱','🌸','🦋','🌺','🍀','🌼','🐝','🌲','🌻','🌾','🍂','🌴','🐞','🪴','🌡','🌊','🍁','🌈'];
-  for (var i = 0; i < 22; i++) {
-    var s = document.createElement('span');
-    s.className = 'sparkle';
-    s.textContent = icons[Math.floor(Math.random() * icons.length)];
-    s.style.left = Math.random() * 100 + '%';
-    s.style.fontSize = (0.8 + Math.random() * 1.2) + 'rem';
-    s.style.animationDuration = (8 + Math.random() * 14) + 's';
-    s.style.animationDelay = (Math.random() * 16) + 's';
-    bg.appendChild(s);
-  }
-}
-
 // ── Color Picker ──────────────────────────────────────────
-function buildColorPicker() {
-  var row = document.getElementById('colorPicker');
+function buildColorPicker(containerId, stateKey) {
+  var row = document.getElementById(containerId);
+  if (!row) return;
+  row.innerHTML = '';
   COLORS.forEach(function(c) {
     var dot = document.createElement('div');
-    dot.className = 'color-dot' + (c === state.selectedColor ? ' selected' : '');
+    dot.className = 'color-dot' + (c === state[stateKey] ? ' selected' : '');
     dot.style.backgroundColor = c;
     dot.dataset.color = c;
     dot.addEventListener('click', function() {
-      document.querySelectorAll('.color-dot').forEach(function(d){ d.classList.remove('selected'); });
+      row.querySelectorAll('.color-dot').forEach(function(d){ d.classList.remove('selected'); });
       dot.classList.add('selected');
-      state.selectedColor = c;
+      state[stateKey] = c;
     });
     row.appendChild(dot);
   });
@@ -83,7 +71,6 @@ function bindNav() {
 function loadAll() {
   showLoading(true);
 
-  // Safety net: hide loading after 12 s no matter what
   var safetyTimer = setTimeout(function() {
     showLoading(false);
     showToast('⚠️ Taking longer than expected — please refresh.');
@@ -94,9 +81,11 @@ function loadAll() {
       clearTimeout(safetyTimer);
       try {
         if (!result) throw new Error('No data returned from server.');
-        state.members = result.members || [];
-        state.chores  = result.chores  || [];
-        state.points  = result.points  || {};
+        state.members     = result.members     || [];
+        state.chores      = result.chores      || [];
+        state.points      = result.points      || {};
+        state.rewards     = result.rewards     || [];
+        state.redemptions = result.redemptions || [];
         renderAll();
       } catch(e) {
         showToast('⚠️ Render error: ' + e.message);
@@ -111,19 +100,18 @@ function loadAll() {
     .getAllData();
 }
 
-// ── getAllData() — must exist in Code.gs as a convenience wrapper ──
-// (we call it at init to minimise round-trips)
-
 // ── Render All Views ──────────────────────────────────────
 function renderAll() {
   renderDashMemberSelect();
   renderMembersTab();
-  renderAdminMembersList();
-  renderAdminChoreForms();
-  renderAdminChoresList();
   renderChoresTab();
-  renderPoolTab();
+  populateChoreForms();
   renderLeaderboard();
+  renderRewardsList();
+  if (state.selectedMember) {
+    var m = state.members.find(function(m){ return m.id === state.selectedMember; });
+    if (m) renderDashChores(m);
+  }
 }
 
 // ── Dashboard: Member Bubbles ─────────────────────────────
@@ -132,7 +120,7 @@ function renderDashMemberSelect() {
   wrap.innerHTML = '';
 
   if (!state.members.length) {
-    wrap.innerHTML = '<p style="text-align:center;color:var(--text-light);font-weight:700;">No family members yet — add some in the Admin tab! 💕</p>';
+    wrap.innerHTML = '<p class="empty-hint">No family members yet — add some in the Family tab! 💕</p>';
     return;
   }
 
@@ -156,19 +144,77 @@ function renderDashChores(member) {
   var area = document.getElementById('dashChoresArea');
   area.classList.remove('hidden');
 
-  document.getElementById('dashMemberName').textContent =
-    safeText(member.name) + "'s Chores";
+  document.getElementById('dashMemberName').textContent = safeText(member.name) + "'s Chores";
 
+  // Points progress bar
+  var pts = state.points[member.id] || 0;
+  var sortedRewards = state.rewards.slice().sort(function(a, b){ return a.pointsRequired - b.pointsRequired; });
+  var nextReward = sortedRewards.find(function(r){ return r.pointsRequired > pts; });
+  var dashBar = document.getElementById('dashPointsBar');
+  dashBar.innerHTML =
+    '<div class="points-total">⭐ ' + pts + ' points earned</div>' +
+    (nextReward
+      ? '<div class="points-next">Next reward: <strong>' + safeText(nextReward.title) + '</strong> at ⭐ ' + nextReward.pointsRequired + ' pts</div>'
+      : (state.rewards.length ? '<div class="points-next">🎉 You can redeem rewards below!</div>' : '<div class="points-next">Keep earning points!</div>')
+    );
+
+  // Assigned chores for this member
   var assigned = state.chores.filter(function(c) {
     return c.assignedTo === member.id && c.status === 'pending';
   });
+  renderChoreGrid('dashAssignedChores', assigned, false);
 
-  var pool = state.chores.filter(function(c) {
-    return c.assignedTo === 'pool' && c.status === 'pending';
+  // General (unassigned) chores
+  var general = state.chores.filter(function(c) {
+    return c.assignedTo === 'general' && c.status === 'pending';
+  });
+  renderChoreGrid('dashGeneralChores', general, true);
+
+  // Populate the quick-assign dropdown
+  var assignSelect = document.getElementById('assignChoreSelect');
+  assignSelect.innerHTML = '<option value="">— Select a general chore —</option>';
+  general.forEach(function(c) {
+    var opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = safeText(c.title) + ' (⭐' + (c.points || 5) + ')';
+    assignSelect.appendChild(opt);
   });
 
-  renderChoreGrid('dashAssignedChores', assigned, false);
-  renderChoreGrid('dashPoolChores', pool, true);
+  // Rewards for this member
+  renderDashRewards(member, pts);
+}
+
+function renderDashRewards(member, pts) {
+  var section = document.getElementById('dashRewardsSection');
+  var grid    = document.getElementById('dashRewardsList');
+
+  if (!state.rewards.length) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  grid.innerHTML = '';
+
+  state.rewards.forEach(function(r) {
+    var canRedeem = pts >= r.pointsRequired;
+    var card = document.createElement('div');
+    card.className = 'reward-card' + (canRedeem ? ' unlocked' : ' locked');
+    card.innerHTML =
+      '<div class="reward-icon">' + (canRedeem ? '🎁' : '🔒') + '</div>' +
+      '<div class="reward-info">' +
+        '<div class="reward-title">' + safeText(r.title) + '</div>' +
+        (r.description ? '<div class="reward-desc">' + safeText(r.description) + '</div>' : '') +
+        '<div class="reward-pts">⭐ ' + r.pointsRequired + ' pts required</div>' +
+      '</div>' +
+      (canRedeem ? '<button class="btn btn-success btn-sm reward-redeem-btn" data-id="' + r.id + '">Redeem 🎉</button>' : '<span class="locked-label">🔒 ' + (r.pointsRequired - pts) + ' pts to go</span>');
+
+    if (canRedeem) {
+      card.querySelector('.reward-redeem-btn').addEventListener('click', function() {
+        redeemRewardAction(r.id, member.id, r.title);
+      });
+    }
+    grid.appendChild(card);
+  });
 }
 
 // ── Chores Tab ────────────────────────────────────────────
@@ -179,50 +225,55 @@ function renderChoresTab() {
 function applyChoreFilters() {
   var memberFilter = document.getElementById('filterMember').value;
   var statusFilter = document.getElementById('filterStatus').value;
+  var typeEl       = document.getElementById('filterType');
+  var typeFilter   = typeEl ? typeEl.value : 'all';
 
   var filtered = state.chores.filter(function(c) {
     var memberOk = memberFilter === 'all' || c.assignedTo === memberFilter;
     var statusOk = statusFilter === 'all' || c.status === statusFilter;
-    return memberOk && statusOk;
+    var typeOk   = typeFilter === 'all' || c.type === typeFilter;
+    return memberOk && statusOk && typeOk;
   });
 
   renderChoreGrid('allChoresGrid', filtered, false);
 }
 
-// ── Pool Tab ──────────────────────────────────────────────
-function renderPoolTab() {
-  var pool = state.chores.filter(function(c) {
-    return c.assignedTo === 'pool' && c.status === 'pending';
-  });
-  renderChoreGrid('poolChoresGrid', pool, true);
-}
-
 // ── Chore Grid renderer ───────────────────────────────────
-function renderChoreGrid(containerId, chores, isPool) {
+function renderChoreGrid(containerId, chores, isGeneral) {
   var grid = document.getElementById(containerId);
+  if (!grid) return;
   grid.innerHTML = '';
 
   if (!chores.length) {
     grid.innerHTML =
       '<div class="empty-state">' +
-        '<div class="empty-icon">' + (isPool ? '🌊' : '🎉') + '</div>' +
-        '<p>' + (isPool ? 'No pool chores right now!' : 'Nothing to do here — enjoy the break!') + '</p>' +
+        '<div class="empty-icon">' + (isGeneral ? '🎯' : '🎉') + '</div>' +
+        '<p>' + (isGeneral ? 'No general chores available!' : 'Nothing here — great job!') + '</p>' +
       '</div>';
     return;
   }
 
   chores.forEach(function(c) {
-    var member = state.members.find(function(m){ return m.id === c.assignedTo; });
+    var member    = state.members.find(function(m){ return m.id === c.assignedTo; });
     var isOverdue = c.dueDate && new Date(c.dueDate) < new Date() && c.status === 'pending';
 
     var card = document.createElement('div');
     card.className = 'chore-card' +
-      (c.status === 'done' ? ' done' : '') +
-      (isPool || c.assignedTo === 'pool' ? ' pool-card' : '');
+      (c.status === 'done'       ? ' done'         : '') +
+      (c.assignedTo === 'general' ? ' general-card' : '') +
+      (c.recurrence === 'permanent' ? ' permanent-card' : '');
     card.dataset.id = c.id;
 
-    var badgeClass = c.status === 'done' ? 'badge-done' : (c.assignedTo === 'pool' ? 'badge-pool' : 'badge-pending');
-    var badgeText  = c.status === 'done' ? '✅ Done' : (c.assignedTo === 'pool' ? '🌊 Pool' : '⏳ Pending');
+    var badgeClass = c.status === 'done'
+      ? 'badge-done'
+      : (c.assignedTo === 'general' ? 'badge-general' : 'badge-pending');
+    var badgeText = c.status === 'done'
+      ? '✅ Done'
+      : (c.assignedTo === 'general' ? '👥 General' : '⏳ Pending');
+
+    var recurrenceBadge = c.recurrence === 'permanent'
+      ? '<span class="chore-meta-tag recurrence">🔄 Permanent</span>'
+      : '';
 
     var dueMeta = c.dueDate
       ? '<span class="chore-meta-tag ' + (isOverdue ? 'overdue' : 'due') + '">' +
@@ -232,7 +283,7 @@ function renderChoreGrid(containerId, chores, isPool) {
 
     var assigneeMeta = member
       ? '<span class="chore-meta-tag">👤 ' + safeText(member.name) + '</span>'
-      : '<span class="chore-meta-tag">🌊 Pool</span>';
+      : '<span class="chore-meta-tag">👥 General</span>';
 
     card.innerHTML =
       '<div class="chore-card-header">' +
@@ -244,6 +295,7 @@ function renderChoreGrid(containerId, chores, isPool) {
         '<span class="chore-meta-tag points">⭐ ' + (c.points || 5) + ' pts</span>' +
         assigneeMeta +
         dueMeta +
+        recurrenceBadge +
       '</div>';
 
     card.addEventListener('click', function() { openChoreModal(c); });
@@ -272,7 +324,41 @@ function renderMembersTab() {
       '<div class="member-card-avatar" style="background:' + safeStyle(m.color) + '">' + memberInitial(m.name) + '</div>' +
       '<div class="member-card-name">' + safeText(m.name) + '</div>' +
       '<div class="member-card-stats">' + done + ' / ' + total + ' chores done</div>' +
-      '<div class="member-card-pts">⭐ ' + pts + ' pts</div>';
+      '<div class="member-card-pts">⭐ ' + pts + ' pts</div>' +
+      '<button class="btn btn-secondary btn-sm member-edit-btn" style="margin-top:0.6rem">✏️ Edit</button>';
+
+    card.querySelector('.member-edit-btn').addEventListener('click', function() {
+      openEditMemberModal(m);
+    });
+    grid.appendChild(card);
+  });
+}
+
+// ── Rewards List (Family tab) ─────────────────────────────
+function renderRewardsList() {
+  var grid = document.getElementById('rewardsList');
+  grid.innerHTML = '';
+
+  if (!state.rewards.length) {
+    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🎁</div><p>No rewards yet — add some above!</p></div>';
+    return;
+  }
+
+  state.rewards.forEach(function(r) {
+    var card = document.createElement('div');
+    card.className = 'reward-card admin-reward';
+    card.innerHTML =
+      '<div class="reward-icon">🎁</div>' +
+      '<div class="reward-info">' +
+        '<div class="reward-title">' + safeText(r.title) + '</div>' +
+        (r.description ? '<div class="reward-desc">' + safeText(r.description) + '</div>' : '') +
+        '<div class="reward-pts">⭐ ' + r.pointsRequired + ' pts required</div>' +
+      '</div>' +
+      '<button class="btn btn-danger btn-sm reward-delete-btn" data-id="' + r.id + '">🗑️</button>';
+
+    card.querySelector('.reward-delete-btn').addEventListener('click', function() {
+      if (confirm('Delete this reward?')) { deleteRewardAction(r.id); }
+    });
     grid.appendChild(card);
   });
 }
@@ -310,100 +396,51 @@ function renderLeaderboard() {
   });
 }
 
-// ── Admin: Populate member/assign selects ─────────────────
-function renderAdminChoreForms() {
-  // filter dropdowns
+// ── Populate Chore Forms ──────────────────────────────────
+function populateChoreForms() {
   var fm = document.getElementById('filterMember');
-  var currentFilter = fm.value;
-  fm.innerHTML = '<option value="all">👨‍👩‍👧 All family members</option>';
+  var currentFilter = fm ? fm.value : 'all';
+  if (fm) fm.innerHTML = '<option value="all">👨‍👩‍👧 All members</option>';
 
-  // new chore assign
   var na = document.getElementById('newChoreAssign');
-  na.innerHTML = '<option value="pool">🌊 Pool (anyone can take)</option>';
+  if (na) na.innerHTML = '<option value="">— Select member —</option>';
 
-  // edit chore assign
   var ea = document.getElementById('editChoreAssign');
-  ea.innerHTML = '<option value="pool">🌊 Pool</option>';
+  if (ea) ea.innerHTML = '<option value="general">👥 General Pool</option>';
 
   state.members.forEach(function(m) {
-    var opt = '<option value="' + m.id + '">' + safeText(m.name) + '</option>';
-    fm.innerHTML += '<option value="' + m.id + '">' + safeText(m.name) + '</option>';
-    na.innerHTML += opt;
-    ea.innerHTML += opt;
+    if (fm) fm.innerHTML += '<option value="' + m.id + '">' + safeText(m.name) + '</option>';
+    if (na) na.innerHTML += '<option value="' + m.id + '">' + safeText(m.name) + '</option>';
+    if (ea) ea.innerHTML += '<option value="' + m.id + '">' + safeText(m.name) + '</option>';
   });
 
-  // restore filter value
-  if (currentFilter) fm.value = currentFilter;
+  if (fm && currentFilter) fm.value = currentFilter;
 }
 
-function renderAdminMembersList() {
-  var list = document.getElementById('adminMembersList');
-  list.innerHTML = '';
+// ── Chore Type Toggle (show/hide assign dropdown) ─────────
+function bindChoreTypeToggle() {
+  var typeSelect  = document.getElementById('newChoreType');
+  var assignGroup = document.getElementById('newChoreAssignGroup');
+  if (!typeSelect || !assignGroup) return;
 
-  if (!state.members.length) {
-    list.innerHTML = '<p style="color:var(--text-light);font-weight:700;text-align:center;">No members yet.</p>';
-    return;
-  }
-
-  state.members.forEach(function(m) {
-    var item = document.createElement('div');
-    item.className = 'admin-list-item';
-    item.innerHTML =
-      '<div class="leader-avatar" style="background:' + safeStyle(m.color) + ';width:36px;height:36px;font-size:1.2rem;">' + memberInitial(m.name) + '</div>' +
-      '<div class="item-info">' + safeText(m.name) + '</div>' +
-      '<button class="btn btn-danger btn-sm" data-id="' + m.id + '">🗑️ Remove</button>';
-
-    item.querySelector('button').addEventListener('click', function() {
-      if (confirm('Remove ' + m.name + ' from the family? Their chores will remain.')) {
-        deleteMember(m.id);
-      }
-    });
-
-    list.appendChild(item);
-  });
-}
-
-function renderAdminChoresList() {
-  var list = document.getElementById('adminChoresList');
-  list.innerHTML = '';
-
-  if (!state.chores.length) {
-    list.innerHTML = '<p style="color:var(--text-light);font-weight:700;text-align:center;">No chores yet.</p>';
-    return;
-  }
-
-  state.chores.forEach(function(c) {
-    var member = state.members.find(function(m){ return m.id === c.assignedTo; });
-    var whoText = member ? safeText(member.name) : '🌊 Pool';
-
-    var item = document.createElement('div');
-    item.className = 'admin-list-item';
-    item.innerHTML =
-      '<div class="item-info">' +
-        '<div>' + safeText(c.title) + '</div>' +
-        '<div class="item-sub">' + whoText + ' · ⭐ ' + (c.points || 5) + ' pts · ' + (c.status === 'done' ? '✅' : '⏳') + '</div>' +
-      '</div>' +
-      '<button class="btn btn-secondary btn-sm edit-btn" data-id="' + c.id + '">✏️ Edit</button>';
-
-    item.querySelector('.edit-btn').addEventListener('click', function() {
-      openEditModal(c);
-    });
-
-    list.appendChild(item);
+  typeSelect.addEventListener('change', function() {
+    assignGroup.style.display = (typeSelect.value === 'individual') ? '' : 'none';
   });
 }
 
 // ── Chore Action Modal ────────────────────────────────────
 function openChoreModal(chore) {
   state.activeModal = chore;
-  var member = state.members.find(function(m){ return m.id === chore.assignedTo; });
 
   document.getElementById('modalEmoji').textContent =
-    chore.status === 'done' ? '✅' : (chore.assignedTo === 'pool' ? '🌊' : '✨');
+    chore.status === 'done' ? '✅' : (chore.assignedTo === 'general' ? '🎯' : '🍂');
   document.getElementById('modalTitle').textContent = chore.title;
   document.getElementById('modalDesc').textContent  = chore.description || '';
   document.getElementById('modalPts').textContent   = '⭐ ' + (chore.points || 5) + ' pts';
   document.getElementById('modalDue').textContent   = chore.dueDate ? '📅 ' + formatDate(chore.dueDate) : '';
+
+  var recEl = document.getElementById('modalRecurrence');
+  if (recEl) recEl.textContent = chore.recurrence === 'permanent' ? '🔄 Permanent' : '';
 
   var claimSec    = document.getElementById('modalClaimSection');
   var completeSec = document.getElementById('modalCompleteSection');
@@ -411,12 +448,10 @@ function openChoreModal(chore) {
   completeSec.classList.add('hidden');
 
   if (chore.status !== 'done') {
-    if (chore.assignedTo === 'pool') {
-      // Pool chore: let a member claim it
+    if (chore.assignedTo === 'general') {
       claimSec.classList.remove('hidden');
       populateMemberSelect('modalClaimSelect');
     } else {
-      // Assigned chore: mark complete
       completeSec.classList.remove('hidden');
       populateMemberSelect('modalCompleteSelect', chore.assignedTo);
     }
@@ -444,8 +479,9 @@ function bindModal() {
   });
 
   document.getElementById('modalClaimBtn').addEventListener('click', function() {
-    var memberId = document.getElementById('modalClaimSelect').value;
-    var chore    = state.activeModal;
+    var memberId   = document.getElementById('modalClaimSelect').value;
+    var recurrence = document.getElementById('modalClaimRecurrence').value;
+    var chore      = state.activeModal;
     if (!memberId || !chore) return;
 
     showLoading(true);
@@ -461,7 +497,7 @@ function bindModal() {
         }
       })
       .withFailureHandler(handleError)
-      .claimChore(chore.id, memberId);
+      .claimChore(chore.id, memberId, recurrence);
   });
 
   document.getElementById('modalCompleteBtn').addEventListener('click', function() {
@@ -473,7 +509,7 @@ function bindModal() {
     google.script.run
       .withSuccessHandler(function(res) {
         if (res.success) {
-          showToast('🎉 Amazing job! Chore marked done! ⭐');
+          showToast('🎉 Amazing job! Points earned! ⭐');
           closeChoreModal();
           loadAll();
         } else {
@@ -485,14 +521,28 @@ function bindModal() {
       .completeChore(chore.id, memberId);
   });
 
-  // Edit modal
+  // Edit chore modal
   document.getElementById('editModalClose').addEventListener('click', closeEditModal);
   document.getElementById('editModal').addEventListener('click', function(e) {
     if (e.target === this) closeEditModal();
   });
-
   document.getElementById('saveEditBtn').addEventListener('click', saveEditChore);
   document.getElementById('deleteChoreBtn').addEventListener('click', deleteChoreFromEdit);
+
+  // Edit member modal
+  document.getElementById('editMemberClose').addEventListener('click', closeEditMemberModal);
+  document.getElementById('editMemberModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditMemberModal();
+  });
+  document.getElementById('saveEditMemberBtn').addEventListener('click', saveEditMember);
+  document.getElementById('deleteMemberBtn').addEventListener('click', function() {
+    var id = document.getElementById('editMemberId').value;
+    var m  = state.members.find(function(m){ return m.id === id; });
+    if (m && confirm('Remove ' + m.name + ' from the family? Their chores will remain.')) {
+      closeEditMemberModal();
+      deleteMemberAction(id);
+    }
+  });
 }
 
 function closeChoreModal() {
@@ -500,18 +550,25 @@ function closeChoreModal() {
   state.activeModal = null;
 }
 
-// ── Edit Modal ────────────────────────────────────────────
+// ── Edit Chore Modal ──────────────────────────────────────
 function openEditModal(chore) {
   state.editingChore = chore;
-  document.getElementById('editChoreId').value    = chore.id;
-  document.getElementById('editChoreTitle').value = chore.title;
-  document.getElementById('editChoreDesc').value  = chore.description || '';
-  document.getElementById('editChorePoints').value= chore.points || 5;
-  document.getElementById('editChoreDue').value   = chore.dueDate || '';
+  document.getElementById('editChoreId').value     = chore.id;
+  document.getElementById('editChoreTitle').value  = chore.title;
+  document.getElementById('editChoreDesc').value   = chore.description || '';
+  document.getElementById('editChorePoints').value = chore.points || 5;
+  document.getElementById('editChoreDue').value    = chore.dueDate || '';
 
-  // make sure select is populated then set value
-  renderAdminChoreForms();
-  document.getElementById('editChoreAssign').value = chore.assignedTo;
+  populateChoreForms();
+
+  var typeEl = document.getElementById('editChoreType');
+  if (typeEl) typeEl.value = chore.type || 'individual';
+
+  var assignEl = document.getElementById('editChoreAssign');
+  if (assignEl) assignEl.value = chore.assignedTo || 'general';
+
+  var recEl = document.getElementById('editChoreRecurrence');
+  if (recEl) recEl.value = chore.recurrence || 'once';
 
   document.getElementById('editModal').classList.remove('hidden');
 }
@@ -522,14 +579,19 @@ function closeEditModal() {
 }
 
 function saveEditChore() {
-  var id     = document.getElementById('editChoreId').value;
-  var title  = document.getElementById('editChoreTitle').value.trim();
-  var desc   = document.getElementById('editChoreDesc').value.trim();
-  var assign = document.getElementById('editChoreAssign').value;
-  var points = document.getElementById('editChorePoints').value;
-  var due    = document.getElementById('editChoreDue').value;
+  var id         = document.getElementById('editChoreId').value;
+  var title      = document.getElementById('editChoreTitle').value.trim();
+  var desc       = document.getElementById('editChoreDesc').value.trim();
+  var type       = document.getElementById('editChoreType').value;
+  var assign     = document.getElementById('editChoreAssign').value;
+  var recurrence = document.getElementById('editChoreRecurrence').value;
+  var points     = document.getElementById('editChorePoints').value;
+  var due        = document.getElementById('editChoreDue').value;
 
   if (!title) { showToast('⚠️ Please enter a chore title!'); return; }
+
+  var assignedTo = (type === 'general') ? 'general' : assign;
+  if (type === 'individual' && !assignedTo) { showToast('⚠️ Please select a family member!'); return; }
 
   showLoading(true);
   google.script.run
@@ -544,7 +606,7 @@ function saveEditChore() {
       }
     })
     .withFailureHandler(handleError)
-    .updateChore(id, title, desc, assign, points, due);
+    .updateChore(id, title, desc, assignedTo, points, due, type, recurrence);
 }
 
 function deleteChoreFromEdit() {
@@ -562,23 +624,62 @@ function deleteChoreFromEdit() {
     .deleteChore(id);
 }
 
-// ── Admin Button Bindings ─────────────────────────────────
-function bindAdminButtons() {
-  document.getElementById('addMemberBtn').addEventListener('click', addMember);
-  document.getElementById('addChoreBtn').addEventListener('click', addChore);
+// ── Edit Member Modal ─────────────────────────────────────
+function openEditMemberModal(member) {
+  state.editingMember    = member;
+  state.editSelectedColor = member.color;
+  document.getElementById('editMemberId').value   = member.id;
+  document.getElementById('editMemberName').value = member.name;
+  buildColorPicker('editColorPicker', 'editSelectedColor');
+  document.getElementById('editMemberModal').classList.remove('hidden');
 }
 
-function addMember() {
-  var name  = document.getElementById('newMemberName').value.trim();
-  var color = state.selectedColor;
+function closeEditMemberModal() {
+  document.getElementById('editMemberModal').classList.add('hidden');
+  state.editingMember = null;
+}
 
+function saveEditMember() {
+  var id    = document.getElementById('editMemberId').value;
+  var name  = document.getElementById('editMemberName').value.trim();
+  var color = state.editSelectedColor;
   if (!name) { showToast('⚠️ Please enter a name!'); return; }
 
   showLoading(true);
   google.script.run
     .withSuccessHandler(function(res) {
       if (res.success) {
-        showToast('🌿 ' + name + ' added to the family!');
+        showToast('✅ Member updated!');
+        closeEditMemberModal();
+        loadAll();
+      } else {
+        showLoading(false);
+        showToast('⚠️ Could not update member.');
+      }
+    })
+    .withFailureHandler(handleError)
+    .updateMember(id, name, color);
+}
+
+// ── Bind Buttons ──────────────────────────────────────────
+function bindButtons() {
+  document.getElementById('addMemberBtn').addEventListener('click', addMember);
+  document.getElementById('addChoreBtn').addEventListener('click', addChore);
+  document.getElementById('addRewardBtn').addEventListener('click', addRewardAction);
+  document.getElementById('assignChoreBtn').addEventListener('click', assignChoreToMember);
+}
+
+// ── Add Member ────────────────────────────────────────────
+function addMember() {
+  var name  = document.getElementById('newMemberName').value.trim();
+  var color = state.selectedColor;
+  if (!name) { showToast('⚠️ Please enter a name!'); return; }
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res.success) {
+        showToast('🍂 ' + name + ' added to the family!');
         document.getElementById('newMemberName').value = '';
         loadAll();
       } else {
@@ -590,14 +691,36 @@ function addMember() {
     .addMember(name, '', color);
 }
 
+function deleteMemberAction(id) {
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function() {
+      showToast('👋 Member removed.');
+      loadAll();
+    })
+    .withFailureHandler(handleError)
+    .deleteMember(id);
+}
+
+// ── Add Chore ─────────────────────────────────────────────
 function addChore() {
-  var title  = document.getElementById('newChoreTitle').value.trim();
-  var desc   = document.getElementById('newChoreDesc').value.trim();
-  var assign = document.getElementById('newChoreAssign').value;
-  var points = document.getElementById('newChorePoints').value;
-  var due    = document.getElementById('newChoreDue').value;
+  var title      = document.getElementById('newChoreTitle').value.trim();
+  var desc       = document.getElementById('newChoreDesc').value.trim();
+  var type       = document.getElementById('newChoreType').value;
+  var assign     = document.getElementById('newChoreAssign').value;
+  var recurrence = document.getElementById('newChoreRecurrence').value;
+  var points     = document.getElementById('newChorePoints').value;
+  var due        = document.getElementById('newChoreDue').value;
 
   if (!title) { showToast('⚠️ Please enter a chore title!'); return; }
+
+  var assignedTo;
+  if (type === 'general') {
+    assignedTo = 'general';
+  } else {
+    if (!assign) { showToast('⚠️ Please select a family member!'); return; }
+    assignedTo = assign;
+  }
 
   showLoading(true);
   google.script.run
@@ -615,24 +738,93 @@ function addChore() {
       }
     })
     .withFailureHandler(handleError)
-    .addChore(title, desc, assign, points, due);
+    .addChore(title, desc, assignedTo, points, due, type, recurrence);
 }
 
-function deleteMember(id) {
+// ── Assign Chore from Home tab ────────────────────────────
+function assignChoreToMember() {
+  var choreId    = document.getElementById('assignChoreSelect').value;
+  var recurrence = document.getElementById('assignRecurrence').value;
+  var memberId   = state.selectedMember;
+
+  if (!choreId)  { showToast('⚠️ Please select a chore to assign!'); return; }
+  if (!memberId) { showToast('⚠️ Please select a family member first!'); return; }
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res.success) {
+        showToast('✅ Chore assigned!');
+        loadAll();
+      } else {
+        showLoading(false);
+        showToast('⚠️ Could not assign chore.');
+      }
+    })
+    .withFailureHandler(handleError)
+    .claimChore(choreId, memberId, recurrence);
+}
+
+// ── Rewards ───────────────────────────────────────────────
+function addRewardAction() {
+  var title  = document.getElementById('newRewardTitle').value.trim();
+  var desc   = document.getElementById('newRewardDesc').value.trim();
+  var points = document.getElementById('newRewardPoints').value;
+  if (!title) { showToast('⚠️ Please enter a reward title!'); return; }
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res.success) {
+        showToast('🎁 Reward added!');
+        document.getElementById('newRewardTitle').value  = '';
+        document.getElementById('newRewardDesc').value   = '';
+        document.getElementById('newRewardPoints').value = '50';
+        loadAll();
+      } else {
+        showLoading(false);
+        showToast('⚠️ Could not add reward.');
+      }
+    })
+    .withFailureHandler(handleError)
+    .addReward(title, desc, points);
+}
+
+function deleteRewardAction(id) {
   showLoading(true);
   google.script.run
     .withSuccessHandler(function() {
-      showToast('👋 Member removed.');
+      showToast('🗑️ Reward removed.');
       loadAll();
     })
     .withFailureHandler(handleError)
-    .deleteMember(id);
+    .deleteReward(id);
+}
+
+function redeemRewardAction(rewardId, memberId, rewardTitle) {
+  if (!confirm('Redeem "' + rewardTitle + '"? This will be logged!')) return;
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res.success) {
+        showToast('🎉 Reward redeemed! Enjoy! 🌟');
+        loadAll();
+      } else {
+        showLoading(false);
+        showToast('⚠️ ' + (res.error || 'Could not redeem reward.'));
+      }
+    })
+    .withFailureHandler(handleError)
+    .redeemReward(rewardId, memberId);
 }
 
 // ── Filters ────────────────────────────────────────────────
 function bindFilters() {
   document.getElementById('filterMember').addEventListener('change', applyChoreFilters);
   document.getElementById('filterStatus').addEventListener('change', applyChoreFilters);
+  var filterType = document.getElementById('filterType');
+  if (filterType) filterType.addEventListener('change', applyChoreFilters);
 }
 
 // ── Helpers ───────────────────────────────────────────────
@@ -659,7 +851,6 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-// Get a safe single-character initial for a member name (fallback: '?')
 function memberInitial(name) {
   var ch = (name && String(name).trim().charAt(0)) || '?';
   return safeText(ch.toUpperCase());
@@ -678,10 +869,9 @@ function safeText(str) {
 
 // Validate colour values before using in style attributes
 function safeStyle(color) {
-  if (!color) return '#ffadd2';
-  // Allow only hex colours and basic named colours
+  if (!color) return '#e8660d';
   if (/^#[0-9a-fA-F]{3,8}$/.test(color)) return color;
   if (/^[a-zA-Z]+$/.test(color)) return color;
-  return '#ffadd2';
+  return '#e8660d';
 }
 </script>
