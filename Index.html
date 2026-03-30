@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>✨ Family Chores ✨</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Pacifico&display=swap" rel="stylesheet">
+  <?!= include('Stylesheet'); ?>
+</head>
+<body>
+
+  <!-- ✨ Floating sparkles background -->
+  <div class="sparkles-bg" id="sparklesBg"></div>
+
+  <!-- ══════════════════════════════════════════════
+       HEADER
+  ══════════════════════════════════════════════ -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="header-logo">
+        <span class="logo-icon">🌸</span>
+        <h1 class="logo-title">Family Chores</h1>
+        <span class="logo-icon">🌸</span>
+      </div>
+      <p class="header-sub">Let's keep our home sparkling! ✨</p>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════
+       NAV TABS
+  ══════════════════════════════════════════════ -->
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="dashboard">🏠 Home</button>
+    <button class="tab-btn" data-tab="chores">📋 Chores</button>
+    <button class="tab-btn" data-tab="pool">🌊 Pool</button>
+    <button class="tab-btn" data-tab="members">👨‍👩‍👧‍👦 Family</button>
+    <button class="tab-btn" data-tab="admin">⚙️ Admin</button>
+  </nav>
+
+  <!-- ══════════════════════════════════════════════
+       MAIN CONTENT
+  ══════════════════════════════════════════════ -->
+  <main class="app-main">
+
+    <!-- ── TOAST NOTIFICATIONS ── -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- ── LOADING OVERLAY ── -->
+    <div id="loadingOverlay" class="loading-overlay">
+      <div class="loading-spinner">
+        <span>🌸</span><span>✨</span><span>💖</span>
+      </div>
+      <p>Loading magic…</p>
+    </div>
+
+    <!-- ════════════════════════════════════════════
+         TAB: DASHBOARD
+    ════════════════════════════════════════════ -->
+    <section id="tab-dashboard" class="tab-content active">
+      <div class="section-header">
+        <h2>✨ Today's Overview</h2>
+        <p class="section-sub">Who's doing what today?</p>
+      </div>
+
+      <!-- Member selector -->
+      <div class="member-selector" id="dashMemberCards"></div>
+
+      <!-- Selected member chores -->
+      <div id="dashChoresArea" class="hidden">
+        <div class="section-header mt-2">
+          <h3 id="dashMemberName">My Chores</h3>
+        </div>
+        <div id="dashAssignedChores" class="chore-grid"></div>
+
+        <div class="section-header mt-2">
+          <h3>🌊 Grab a Pool Chore</h3>
+          <p class="section-sub">Pick one up and earn bonus points!</p>
+        </div>
+        <div id="dashPoolChores" class="chore-grid"></div>
+      </div>
+
+      <!-- Leaderboard -->
+      <div class="section-header mt-3">
+        <h2>🏆 Star Chart</h2>
+        <p class="section-sub">Points earned this week</p>
+      </div>
+      <div id="leaderboard" class="leaderboard"></div>
+    </section>
+
+    <!-- ════════════════════════════════════════════
+         TAB: ALL CHORES
+    ════════════════════════════════════════════ -->
+    <section id="tab-chores" class="tab-content">
+      <div class="section-header">
+        <h2>📋 All Chores</h2>
+        <p class="section-sub">View and manage assigned chores</p>
+      </div>
+
+      <div class="filter-bar">
+        <select id="filterMember" class="input-field">
+          <option value="all">👨‍👩‍👧 All family members</option>
+        </select>
+        <select id="filterStatus" class="input-field">
+          <option value="all">All statuses</option>
+          <option value="pending">⏳ Pending</option>
+          <option value="done">✅ Done</option>
+        </select>
+      </div>
+
+      <div id="allChoresGrid" class="chore-grid"></div>
+    </section>
+
+    <!-- ════════════════════════════════════════════
+         TAB: POOL CHORES
+    ════════════════════════════════════════════ -->
+    <section id="tab-pool" class="tab-content">
+      <div class="section-header">
+        <h2>🌊 The Chore Pool</h2>
+        <p class="section-sub">Up for grabs — claim one and earn stars! ⭐</p>
+      </div>
+      <div id="poolChoresGrid" class="chore-grid"></div>
+    </section>
+
+    <!-- ════════════════════════════════════════════
+         TAB: FAMILY MEMBERS
+    ════════════════════════════════════════════ -->
+    <section id="tab-members" class="tab-content">
+      <div class="section-header">
+        <h2>👨‍👩‍👧‍👦 Our Family</h2>
+        <p class="section-sub">Everyone in our awesome crew</p>
+      </div>
+      <div id="memberCards" class="member-grid"></div>
+    </section>
+
+    <!-- ════════════════════════════════════════════
+         TAB: ADMIN
+    ════════════════════════════════════════════ -->
+    <section id="tab-admin" class="tab-content">
+      <div class="section-header">
+        <h2>⚙️ Admin Panel</h2>
+        <p class="section-sub">Manage family members and chores</p>
+      </div>
+
+      <!-- Add Member Card -->
+      <div class="admin-card">
+        <h3>➕ Add Family Member</h3>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="newMemberName" class="input-field" placeholder="e.g. Sofia" maxlength="40">
+          </div>
+          <div class="form-group">
+            <label>Avatar Emoji</label>
+            <input type="text" id="newMemberAvatar" class="input-field emoji-input" placeholder="🧒" maxlength="4">
+          </div>
+          <div class="form-group">
+            <label>Colour Theme</label>
+            <div class="color-picker-row" id="colorPicker"></div>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="addMemberBtn">🌸 Add Member</button>
+      </div>
+
+      <!-- Add Chore Card -->
+      <div class="admin-card">
+        <h3>✏️ Add New Chore</h3>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Title</label>
+            <input type="text" id="newChoreTitle" class="input-field" placeholder="e.g. Vacuum living room" maxlength="80">
+          </div>
+          <div class="form-group">
+            <label>Description (optional)</label>
+            <input type="text" id="newChoreDesc" class="input-field" placeholder="More details…" maxlength="200">
+          </div>
+          <div class="form-group">
+            <label>Assign To</label>
+            <select id="newChoreAssign" class="input-field">
+              <option value="pool">🌊 Pool (anyone can take)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>⭐ Points</label>
+            <input type="number" id="newChorePoints" class="input-field" value="5" min="1" max="100">
+          </div>
+          <div class="form-group">
+            <label>Due Date (optional)</label>
+            <input type="date" id="newChoreDue" class="input-field">
+          </div>
+        </div>
+        <button class="btn btn-primary" id="addChoreBtn">✨ Add Chore</button>
+      </div>
+
+      <!-- Members list (admin) -->
+      <div class="admin-card">
+        <h3>👨‍👩‍👧‍👦 Manage Members</h3>
+        <div id="adminMembersList" class="admin-list"></div>
+      </div>
+
+      <!-- Chores list (admin) -->
+      <div class="admin-card">
+        <h3>📋 Manage Chores</h3>
+        <div id="adminChoresList" class="admin-list"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ══════════════════════════════════════════════
+       MODAL — Claim / Complete chore
+  ══════════════════════════════════════════════ -->
+  <div id="choreModal" class="modal hidden">
+    <div class="modal-box">
+      <button class="modal-close" id="modalClose">✕</button>
+      <div class="modal-emoji" id="modalEmoji">✨</div>
+      <h3 id="modalTitle">Chore Title</h3>
+      <p id="modalDesc" class="modal-desc"></p>
+      <div class="modal-meta">
+        <span id="modalPts">⭐ 5 pts</span>
+        <span id="modalDue"></span>
+      </div>
+
+      <!-- Claim section (pool chores) -->
+      <div id="modalClaimSection" class="hidden">
+        <p class="modal-prompt">Who's claiming this chore?</p>
+        <select id="modalClaimSelect" class="input-field"></select>
+        <button class="btn btn-secondary" id="modalClaimBtn">🙋 Claim It!</button>
+      </div>
+
+      <!-- Complete section -->
+      <div id="modalCompleteSection" class="hidden">
+        <p class="modal-prompt">Mark as done?</p>
+        <select id="modalCompleteSelect" class="input-field"></select>
+        <button class="btn btn-success" id="modalCompleteBtn">✅ Mark Done!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       EDIT CHORE MODAL
+  ══════════════════════════════════════════════ -->
+  <div id="editModal" class="modal hidden">
+    <div class="modal-box">
+      <button class="modal-close" id="editModalClose">✕</button>
+      <h3>✏️ Edit Chore</h3>
+      <input type="hidden" id="editChoreId">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Title</label>
+          <input type="text" id="editChoreTitle" class="input-field" maxlength="80">
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" id="editChoreDesc" class="input-field" maxlength="200">
+        </div>
+        <div class="form-group">
+          <label>Assign To</label>
+          <select id="editChoreAssign" class="input-field">
+            <option value="pool">🌊 Pool</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>⭐ Points</label>
+          <input type="number" id="editChorePoints" class="input-field" min="1" max="100">
+        </div>
+        <div class="form-group">
+          <label>Due Date</label>
+          <input type="date" id="editChoreDue" class="input-field">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="saveEditBtn">💾 Save Changes</button>
+        <button class="btn btn-danger" id="deleteChoreBtn">🗑️ Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <?!= include('JavaScript'); ?>
+</body>
+</html>
