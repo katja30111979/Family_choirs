@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // ── Sparkles ──────────────────────────────────────────────
 function buildSparkles() {
   var bg = document.getElementById('sparklesBg');
-  var icons = ['⭐','🌈','🎉','🏡','🎯','🧹','💛','💙','❤️','💚','🌟','🎊','🏆','✅','🌿'];
+  var icons = ['🌿','🍃','🌱','🌸','🦋','🌺','🍀','🌼','🐝','🌲','🌻','🌾','🍂','🌴','🐞','🪴','🌡','🌊','🍁','🌈'];
   for (var i = 0; i < 22; i++) {
     var s = document.createElement('span');
     s.className = 'sparkle';
@@ -570,10 +570,13 @@ function addMember() {
   google.script.run
     .withSuccessHandler(function(res) {
       if (res.success) {
-        showToast('🌸 ' + name + ' added to the family!');
+        showToast('🌿 ' + name + ' added to the family!');
         document.getElementById('newMemberName').value   = '';
         document.getElementById('newMemberAvatar').value = '';
         loadAll();
+      } else {
+        showLoading(false);
+        showToast('⚠️ Could not add member. Please try again.');
       }
     })
     .withFailureHandler(handleError)
@@ -593,12 +596,15 @@ function addChore() {
   google.script.run
     .withSuccessHandler(function(res) {
       if (res.success) {
-        showToast('✨ Chore added!');
+        showToast('🌱 Chore added!');
         document.getElementById('newChoreTitle').value  = '';
         document.getElementById('newChoreDesc').value   = '';
         document.getElementById('newChorePoints').value = '5';
         document.getElementById('newChoreDue').value    = '';
         loadAll();
+      } else {
+        showLoading(false);
+        showToast('⚠️ Could not add chore. Please try again.');
       }
     })
     .withFailureHandler(handleError)
