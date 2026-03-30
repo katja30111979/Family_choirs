@@ -19,7 +19,13 @@ var state = {
 };
 
 var COLORS = [
-  '#e8660d','#d35400','#f0a500','#d4ac0d',
+  // Oranges & Golds
+  '#e8660d','#d35400','#f0a500',
+  // Yellows
+  '#d4ac0d','#f1c40f','#f9ca24','#e6b800',
+  // Greens
+  '#27ae60','#2ecc71','#1abc9c','#6ab04c','#78e08f',
+  // Reds & Browns
   '#8b1a1a','#c0392b','#784212','#935116',
   '#7e5109','#a04000'
 ];
@@ -68,7 +74,8 @@ function bindNav() {
 }
 
 // ── Load All Data ─────────────────────────────────────────
-function loadAll() {
+function loadAll(retryCount) {
+  retryCount = retryCount || 0;
   showLoading(true);
 
   var safetyTimer = setTimeout(function() {
@@ -79,8 +86,19 @@ function loadAll() {
   google.script.run
     .withSuccessHandler(function(result) {
       clearTimeout(safetyTimer);
+
+      // If the server returned nothing, retry up to 2 times before giving up
+      if (result == null) {
+        if (retryCount < 2) {
+          setTimeout(function() { loadAll(retryCount + 1); }, 1500);
+        } else {
+          showLoading(false);
+          showToast('⚠️ Render error: no data returned from server. Please refresh.');
+        }
+        return;
+      }
+
       try {
-        if (!result) throw new Error('No data returned from server.');
         state.members     = result.members     || [];
         state.chores      = result.chores      || [];
         state.points      = result.points      || {};

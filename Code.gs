@@ -63,28 +63,49 @@ function _setupSheets() {
     if (lastCol < 10) { cSheet.getRange(1, 10).setValue('Recurrence').setFontWeight('bold'); }
 
     // Back-fill Type, Recurrence defaults and migrate legacy 'pool' values to 'general'
+    // Use a single batch read to avoid O(n) individual API calls per request.
     var numRows = cSheet.getLastRow();
     if (numRows > 1) {
-      for (var r = 2; r <= numRows; r++) {
-        var assignedTo = cSheet.getRange(r, 4).getValue();
-        var typeVal    = cSheet.getRange(r, 9).getValue();
-        var recVal     = cSheet.getRange(r, 10).getValue();
+      var allData = cSheet.getDataRange().getValues();
+      var newAssigned = [];
+      var newTypes    = [];
+      var newRecs     = [];
+      var needsWrite  = false;
+
+      for (var r = 1; r < allData.length; r++) {
+        var assignedTo = allData[r][3];
+        var typeVal    = allData[r][8];
+        var recVal     = allData[r][9];
 
         // Migrate legacy 'pool' assignedTo value to 'general'
         if (assignedTo === 'pool') {
-          cSheet.getRange(r, 4).setValue('general');
           assignedTo = 'general';
+          needsWrite = true;
         }
 
         // Back-fill Type if empty
         if (!typeVal) {
-          cSheet.getRange(r, 9).setValue(assignedTo === 'general' ? 'general' : 'individual');
+          typeVal = (assignedTo === 'general' ? 'general' : 'individual');
+          needsWrite = true;
         }
 
         // Back-fill Recurrence if empty
         if (!recVal) {
-          cSheet.getRange(r, 10).setValue('once');
+          recVal = 'once';
+          needsWrite = true;
         }
+
+        newAssigned.push([assignedTo]);
+        newTypes.push([typeVal]);
+        newRecs.push([recVal]);
+      }
+
+      // Write back only when changes are required (batch writes)
+      if (needsWrite) {
+        var dataRows = allData.length - 1;
+        cSheet.getRange(2, 4, dataRows, 1).setValues(newAssigned);
+        cSheet.getRange(2, 9, dataRows, 1).setValues(newTypes);
+        cSheet.getRange(2, 10, dataRows, 1).setValues(newRecs);
       }
     }
   }
