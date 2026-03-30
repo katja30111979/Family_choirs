@@ -92,10 +92,11 @@ function loadAll() {
   google.script.run
     .withSuccessHandler(function(result) {
       clearTimeout(safetyTimer);
-      state.members = result.members || [];
-      state.chores  = result.chores  || [];
-      state.points  = result.points  || {};
       try {
+        if (!result) throw new Error('No data returned from server.');
+        state.members = result.members || [];
+        state.chores  = result.chores  || [];
+        state.points  = result.points  || {};
         renderAll();
       } catch(e) {
         showToast('⚠️ Render error: ' + e.message);
@@ -139,7 +140,7 @@ function renderDashMemberSelect() {
     var div = document.createElement('div');
     div.className = 'member-bubble' + (state.selectedMember === m.id ? ' selected' : '');
     div.innerHTML =
-      '<div class="bubble-ring" style="background:' + safeStyle(m.color) + '">' + safeText(m.avatar) + '</div>' +
+      '<div class="bubble-ring" style="background:' + safeStyle(m.color) + '">' + memberInitial(m.name) + '</div>' +
       '<span class="bubble-name">' + safeText(m.name) + '</span>';
     div.addEventListener('click', function() {
       state.selectedMember = m.id;
@@ -156,7 +157,7 @@ function renderDashChores(member) {
   area.classList.remove('hidden');
 
   document.getElementById('dashMemberName').textContent =
-    safeText(member.avatar) + ' ' + safeText(member.name) + "'s Chores";
+    safeText(member.name) + "'s Chores";
 
   var assigned = state.chores.filter(function(c) {
     return c.assignedTo === member.id && c.status === 'pending';
@@ -212,7 +213,6 @@ function renderChoreGrid(containerId, chores, isPool) {
 
   chores.forEach(function(c) {
     var member = state.members.find(function(m){ return m.id === c.assignedTo; });
-    var avatarTag = member ? safeText(member.avatar) : (isPool ? '🌊' : '✨');
     var isOverdue = c.dueDate && new Date(c.dueDate) < new Date() && c.status === 'pending';
 
     var card = document.createElement('div');
@@ -231,12 +231,12 @@ function renderChoreGrid(containerId, chores, isPool) {
       : '';
 
     var assigneeMeta = member
-      ? '<span class="chore-meta-tag">' + safeText(member.avatar) + ' ' + safeText(member.name) + '</span>'
+      ? '<span class="chore-meta-tag">👤 ' + safeText(member.name) + '</span>'
       : '<span class="chore-meta-tag">🌊 Pool</span>';
 
     card.innerHTML =
       '<div class="chore-card-header">' +
-        '<span class="chore-title">' + avatarTag + ' ' + safeText(c.title) + '</span>' +
+        '<span class="chore-title">' + safeText(c.title) + '</span>' +
         '<span class="chore-status-badge ' + badgeClass + '">' + badgeText + '</span>' +
       '</div>' +
       (c.description ? '<p class="chore-desc">' + safeText(c.description) + '</p>' : '') +
@@ -269,7 +269,7 @@ function renderMembersTab() {
     var card = document.createElement('div');
     card.className = 'member-card';
     card.innerHTML =
-      '<div class="member-card-avatar" style="background:' + safeStyle(m.color) + '">' + safeText(m.avatar) + '</div>' +
+      '<div class="member-card-avatar" style="background:' + safeStyle(m.color) + '">' + memberInitial(m.name) + '</div>' +
       '<div class="member-card-name">' + safeText(m.name) + '</div>' +
       '<div class="member-card-stats">' + done + ' / ' + total + ' chores done</div>' +
       '<div class="member-card-pts">⭐ ' + pts + ' pts</div>';
@@ -302,7 +302,7 @@ function renderLeaderboard() {
     row.className = 'leader-row';
     row.innerHTML =
       '<div class="leader-rank">' + (medals[i] || (i + 1) + '.') + '</div>' +
-      '<div class="leader-avatar" style="background:' + safeStyle(m.color) + '">' + safeText(m.avatar) + '</div>' +
+      '<div class="leader-avatar" style="background:' + safeStyle(m.color) + '">' + memberInitial(m.name) + '</div>' +
       '<div class="leader-name">' + safeText(m.name) + '</div>' +
       '<div class="leader-bar-wrap"><div class="leader-bar" style="width:' + pct + '%"></div></div>' +
       '<div class="leader-pts">⭐ ' + pts + '</div>';
@@ -326,8 +326,8 @@ function renderAdminChoreForms() {
   ea.innerHTML = '<option value="pool">🌊 Pool</option>';
 
   state.members.forEach(function(m) {
-    var opt = '<option value="' + m.id + '">' + safeText(m.avatar) + ' ' + safeText(m.name) + '</option>';
-    fm.innerHTML += '<option value="' + m.id + '">' + safeText(m.avatar) + ' ' + safeText(m.name) + '</option>';
+    var opt = '<option value="' + m.id + '">' + safeText(m.name) + '</option>';
+    fm.innerHTML += '<option value="' + m.id + '">' + safeText(m.name) + '</option>';
     na.innerHTML += opt;
     ea.innerHTML += opt;
   });
@@ -349,7 +349,7 @@ function renderAdminMembersList() {
     var item = document.createElement('div');
     item.className = 'admin-list-item';
     item.innerHTML =
-      '<div class="leader-avatar" style="background:' + safeStyle(m.color) + ';width:36px;height:36px;font-size:1.2rem;">' + safeText(m.avatar) + '</div>' +
+      '<div class="leader-avatar" style="background:' + safeStyle(m.color) + ';width:36px;height:36px;font-size:1.2rem;">' + memberInitial(m.name) + '</div>' +
       '<div class="item-info">' + safeText(m.name) + '</div>' +
       '<button class="btn btn-danger btn-sm" data-id="' + m.id + '">🗑️ Remove</button>';
 
@@ -374,7 +374,7 @@ function renderAdminChoresList() {
 
   state.chores.forEach(function(c) {
     var member = state.members.find(function(m){ return m.id === c.assignedTo; });
-    var whoText = member ? safeText(member.avatar + ' ' + member.name) : '🌊 Pool';
+    var whoText = member ? safeText(member.name) : '🌊 Pool';
 
     var item = document.createElement('div');
     item.className = 'admin-list-item';
@@ -399,7 +399,7 @@ function openChoreModal(chore) {
   var member = state.members.find(function(m){ return m.id === chore.assignedTo; });
 
   document.getElementById('modalEmoji').textContent =
-    chore.status === 'done' ? '✅' : (chore.assignedTo === 'pool' ? '🌊' : (member ? member.avatar : '✨'));
+    chore.status === 'done' ? '✅' : (chore.assignedTo === 'pool' ? '🌊' : '✨');
   document.getElementById('modalTitle').textContent = chore.title;
   document.getElementById('modalDesc').textContent  = chore.description || '';
   document.getElementById('modalPts').textContent   = '⭐ ' + (chore.points || 5) + ' pts';
@@ -431,7 +431,7 @@ function populateMemberSelect(selectId, preselect) {
   state.members.forEach(function(m) {
     var opt = document.createElement('option');
     opt.value = m.id;
-    opt.textContent = m.avatar + ' ' + m.name;
+    opt.textContent = m.name;
     if (preselect && m.id === preselect) opt.selected = true;
     sel.appendChild(opt);
   });
@@ -455,6 +455,9 @@ function bindModal() {
           showToast('🙋 Chore claimed! Good luck! ✨');
           closeChoreModal();
           loadAll();
+        } else {
+          showLoading(false);
+          showToast('⚠️ Could not claim chore. Please try again.');
         }
       })
       .withFailureHandler(handleError)
@@ -473,6 +476,9 @@ function bindModal() {
           showToast('🎉 Amazing job! Chore marked done! ⭐');
           closeChoreModal();
           loadAll();
+        } else {
+          showLoading(false);
+          showToast('⚠️ Could not mark chore done. Please try again.');
         }
       })
       .withFailureHandler(handleError)
@@ -532,6 +538,9 @@ function saveEditChore() {
         showToast('✅ Chore updated!');
         closeEditModal();
         loadAll();
+      } else {
+        showLoading(false);
+        showToast('⚠️ Could not update chore. Please try again.');
       }
     })
     .withFailureHandler(handleError)
@@ -560,9 +569,8 @@ function bindAdminButtons() {
 }
 
 function addMember() {
-  var name   = document.getElementById('newMemberName').value.trim();
-  var avatar = document.getElementById('newMemberAvatar').value.trim() || '🧒';
-  var color  = state.selectedColor;
+  var name  = document.getElementById('newMemberName').value.trim();
+  var color = state.selectedColor;
 
   if (!name) { showToast('⚠️ Please enter a name!'); return; }
 
@@ -571,8 +579,7 @@ function addMember() {
     .withSuccessHandler(function(res) {
       if (res.success) {
         showToast('🌿 ' + name + ' added to the family!');
-        document.getElementById('newMemberName').value   = '';
-        document.getElementById('newMemberAvatar').value = '';
+        document.getElementById('newMemberName').value = '';
         loadAll();
       } else {
         showLoading(false);
@@ -580,7 +587,7 @@ function addMember() {
       }
     })
     .withFailureHandler(handleError)
-    .addMember(name, avatar, color);
+    .addMember(name, '', color);
 }
 
 function addChore() {
@@ -650,6 +657,12 @@ function formatDate(dateStr) {
   if (!dateStr) return '';
   var d = new Date(dateStr + 'T00:00:00');
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// Get a safe single-character initial for a member name (fallback: '?')
+function memberInitial(name) {
+  var ch = (name && String(name).trim().charAt(0)) || '?';
+  return safeText(ch.toUpperCase());
 }
 
 // Prevent XSS when inserting user data into innerHTML
