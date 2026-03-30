@@ -9,15 +9,15 @@ var state = {
   chores:        [],
   points:        {},
   selectedMember: null,
-  selectedColor: '#ffadd2',
+  selectedColor: '#bae0ff',
   editingChore:  null,
   activeModal:   null
 };
 
 var COLORS = [
-  '#ffadd2','#ffd6e7','#d3adf7','#b5ead7',
-  '#bae0ff','#ffd7ba','#fff1b8','#c9b8f5',
-  '#f6c6ea','#aef2e0'
+  '#bae0ff','#69b1ff','#fffbe6','#fff566',
+  '#ffccc7','#ff4d4f','#d9f7be','#52c41a',
+  '#ffd591','#adc6ff'
 ];
 
 var EMOJIS_CHORES = ['🧹','🧺','🍽️','🌿','🛒','📚','🐶','🏡','💧','🪣','✨','🧽','🛏️','🚿','🪴'];
@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // ── Sparkles ──────────────────────────────────────────────
 function buildSparkles() {
   var bg = document.getElementById('sparklesBg');
-  var icons = ['✨','🌸','💖','⭐','🌟','💜','💗','🦋','🌺','💫'];
+  var icons = ['⭐','🌈','🎉','🏡','🎯','🧹','💛','💙','❤️','💚','🌟','🎊','🏆','✅','🌿'];
   for (var i = 0; i < 22; i++) {
     var s = document.createElement('span');
     s.className = 'sparkle';
@@ -82,16 +82,29 @@ function bindNav() {
 // ── Load All Data ─────────────────────────────────────────
 function loadAll() {
   showLoading(true);
+
+  // Safety net: hide loading after 12 s no matter what
+  var safetyTimer = setTimeout(function() {
+    showLoading(false);
+    showToast('⚠️ Taking longer than expected — please refresh.');
+  }, 12000);
+
   google.script.run
     .withSuccessHandler(function(result) {
+      clearTimeout(safetyTimer);
       state.members = result.members || [];
       state.chores  = result.chores  || [];
       state.points  = result.points  || {};
-      renderAll();
+      try {
+        renderAll();
+      } catch(e) {
+        showToast('⚠️ Render error: ' + e.message);
+      }
       showLoading(false);
     })
     .withFailureHandler(function(err) {
-      showToast('⚠️ Could not load data: ' + err.message);
+      clearTimeout(safetyTimer);
+      showToast('⚠️ Could not load data: ' + (err.message || err));
       showLoading(false);
     })
     .getAllData();

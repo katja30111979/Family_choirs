@@ -2,7 +2,7 @@
 // Family Chores Web App - Google Apps Script Backend
 // ============================================================
 
-var SPREADSHEET_ID = ''; // Leave blank to auto-create on first run
+var SPREADSHEET_ID = '1Z6k0LseFQwsxp8IaV3zZ3aG3sx8EA9Bqhz6qSM7m4aM';
 var SS;
 
 // ── Sheet names ──────────────────────────────────────────────
@@ -34,43 +34,35 @@ function include(filename) {
 // SPREADSHEET INIT
 // ─────────────────────────────────────────────────────────────
 function initSpreadsheet() {
-  var scriptProps = PropertiesService.getScriptProperties();
-  var id = scriptProps.getProperty('SPREADSHEET_ID');
-
-  if (id) {
-    SS = SpreadsheetApp.openById(id);
-  } else {
-    SS = SpreadsheetApp.create('Family Chores Data');
-    scriptProps.setProperty('SPREADSHEET_ID', SS.getId());
-    _setupSheets();
-  }
+  if (SS) return; // already initialised in this execution
+  SS = SpreadsheetApp.openById(SPREADSHEET_ID);
+  _setupSheets(); // ensure all required sheets/headers exist
 }
 
 function _setupSheets() {
   // Members sheet: ID | Name | Avatar (emoji) | Color
-  var mSheet = SS.getSheetByName(SHEET_MEMBERS) || SS.insertSheet(SHEET_MEMBERS);
-  if (mSheet.getLastRow() === 0) {
+  var mSheet = SS.getSheetByName(SHEET_MEMBERS);
+  if (!mSheet) {
+    mSheet = SS.insertSheet(SHEET_MEMBERS);
     mSheet.appendRow(['ID', 'Name', 'Avatar', 'Color']);
     mSheet.getRange(1, 1, 1, 4).setFontWeight('bold');
   }
 
-  // Chores sheet: ID | Title | Description | AssignedTo (MemberID or "pool") | Points | Status | DueDate | CreatedAt
-  var cSheet = SS.getSheetByName(SHEET_CHORES) || SS.insertSheet(SHEET_CHORES);
-  if (cSheet.getLastRow() === 0) {
+  // Chores sheet: ID | Title | Description | AssignedTo | Points | Status | DueDate | CreatedAt
+  var cSheet = SS.getSheetByName(SHEET_CHORES);
+  if (!cSheet) {
+    cSheet = SS.insertSheet(SHEET_CHORES);
     cSheet.appendRow(['ID', 'Title', 'Description', 'AssignedTo', 'Points', 'Status', 'DueDate', 'CreatedAt']);
     cSheet.getRange(1, 1, 1, 8).setFontWeight('bold');
   }
 
   // Completion log: ChoreID | MemberID | CompletedAt
-  var lSheet = SS.getSheetByName(SHEET_LOG) || SS.insertSheet(SHEET_LOG);
-  if (lSheet.getLastRow() === 0) {
+  var lSheet = SS.getSheetByName(SHEET_LOG);
+  if (!lSheet) {
+    lSheet = SS.insertSheet(SHEET_LOG);
     lSheet.appendRow(['ChoreID', 'MemberID', 'CompletedAt']);
     lSheet.getRange(1, 1, 1, 3).setFontWeight('bold');
   }
-
-  // Remove default empty sheet if present
-  var def = SS.getSheetByName('Sheet1');
-  if (def) SS.deleteSheet(def);
 }
 
 // ─────────────────────────────────────────────────────────────
